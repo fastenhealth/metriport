@@ -51,6 +51,7 @@ server.headersTimeout = keepalive + oneSecond;
 
 /** Graceful shutdown: close the server on SIGTERM/SIGINT so the container stops cleanly. */
 function shutdown(s) { 
+  console.log("SIGNAL: " + s)
   server.close(() => process.exit(0)); 
   setTimeout(() => process.exit(0), 5000); 
 }
