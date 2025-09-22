@@ -2,7 +2,7 @@ name: Build and Push Docker Image to GHCR
 
 on:
   push:
-    branches: [pr_github_action_metriport_converter_docker]
+    branches: [fastenhealth-main]
 
 jobs:
   build-and-push:
