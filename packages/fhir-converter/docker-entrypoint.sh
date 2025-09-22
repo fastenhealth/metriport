@@ -24,5 +24,8 @@ MEMORY_LIMIT="${MEM_LIMIT:=3584}";
 export NODE_OPTIONS="--max-old-space-size=${MEMORY_LIMIT}"
 echo "NODE_OPTIONS: ${NODE_OPTIONS}"
 
-# Start the application
-npm start
+# Run Node as PID 1 (not npm) so SIGTERM/SIGINT are handled and exit codes are clean.
+# Workers are stable on Node 18+, so no experimental flags are needed.
+# Prestart the initial service
+node src/init-service.js
+exec node src/index.js
