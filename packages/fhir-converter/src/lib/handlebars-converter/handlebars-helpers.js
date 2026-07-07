@@ -203,7 +203,19 @@ var generateLocationId = function (location) {
     );
     return id;
   } else if (location.playingEntity?.name) {
-    const id = uuidv3(location.playingEntity.name, uuidv3.URL);
+    /**
+     * In some cases we see playingEntity?.name that looks like name: { _: 'REAL NAME' } which fails conversion.
+     * We're adding this because name is supposed to be a string ('REAL NAME').
+     * This has something to do with wether "addr" is present in playingEntity when it is not we seem to be hitting this error.
+     * The exact cause is unknown.
+     *
+     * Link to original issue: https://linear.app/metriport/issue/ENG-975/fhir-converter-name-field-not-working
+     */
+    const peName = location?.playingEntity?.name;
+    if (peName && typeof peName === "object" && Object.prototype.hasOwnProperty.call(peName, "_")) {
+      return uuidv3(peName._, uuidv3.URL);
+    }
+    const id = uuidv3(peName, uuidv3.URL);
     return id;
   }
 
@@ -341,7 +353,7 @@ var buildCodeableConcept = function (code, canBeUnknown = false) {
 
   const codeableConcept = {
     text,
-    coding: buildCoding(code, canBeUnknown),
+    coding: [buildCoding(code, canBeUnknown)],
   };
 
   return codeableConcept;
@@ -672,6 +684,27 @@ var getSpecifiedEntryRelationship = function (entryRelationshipContainer, target
     entryRelationship =>
       entryRelationship?.typeCode && entryRelationship.typeCode === targetTypeCode
   );
+};
+
+var getSpecifiedEntryRelationshipArray = function (entryRelationshipContainer, targetTypeCode) {
+  const entryRelationshipArray = Array.isArray(entryRelationshipContainer)
+    ? entryRelationshipContainer
+    : [entryRelationshipContainer];
+
+  return entryRelationshipArray?.filter(er => er?.typeCode && er.typeCode === targetTypeCode);
+};
+
+var generateUuid = function (urlNamespace) {
+  return uuidv3("".concat(urlNamespace), uuidv3.URL);
+};
+
+var buildMedicationRequestId = function (substanceAdminEntries) {
+  const supplyEntry = getSpecifiedEntryRelationshipArray(substanceAdminEntries, "REFR").find(
+    er => er.supply
+  );
+  if (!supplyEntry) return undefined;
+  const uuid = generateUuid(JSON.stringify(supplyEntry.supply));
+  return uuid;
 };
 
 module.exports.internal = {
@@ -1351,7 +1384,7 @@ module.exports.external = [
     name: "generateUUID",
     description: "Generates a guid based on a URL: generateUUID url",
     func: function (urlNamespace) {
-      return uuidv3("".concat(urlNamespace), uuidv3.URL);
+      return generateUuid(urlNamespace);
     },
   },
   {
@@ -1428,6 +1461,7 @@ module.exports.external = [
     name: "toString",
     description: "Converts to string: toString object",
     func: function (str) {
+      if (str == undefined) return "";
       return str.toString();
     },
   },
@@ -1618,7 +1652,7 @@ module.exports.external = [
     name: "startsWith",
     description: "Checks if a string starts with a given substring: startsWith string substring",
     func: function (str, substr) {
-      return str.startsWith(substr);
+      return String(str)?.startsWith(substr);
     },
   },
   {
@@ -2015,6 +2049,7 @@ module.exports.external = [
       if (!mappedData || mappedData.length === 0) return "";
       return mappedData
         .map(entry => {
+          if (!entry || typeof entry !== "object") return "";
           return Object.entries(entry)
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n");
@@ -2103,6 +2138,21 @@ module.exports.external = [
     description: "Returns the specified entry relationship if it exists.",
     func: function (entryRelationships, targetTypeCode) {
       return getSpecifiedEntryRelationship(entryRelationships, targetTypeCode);
+    },
+  },
+  {
+    name: "getSpecifiedEntryRelationshipArray",
+    description: "Returns an array of specified entry relationships.",
+    func: function (entryRelationships, targetTypeCode) {
+      return getSpecifiedEntryRelationshipArray(entryRelationships, targetTypeCode);
+    },
+  },
+  {
+    name: "buildMedicationRequestId",
+    description:
+      "Builds a medication request ID from a list of entry relationships that contain a supply field.",
+    func: function (substanceAdminEntries) {
+      return buildMedicationRequestId(substanceAdminEntries);
     },
   },
 ];
